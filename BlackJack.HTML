@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Blackjack Card Counter + Bet Spread + Strategy</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 2fr 2fr;
+      gap: 20px;
+    }
+    .box {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    h2 { margin-top: 0; }
+    .card-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    .card-list span {
+      background: #eee;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    #history {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 8px;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+    .card-buttons {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+    }
+    button {
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .card-btn {
+      background: #3498db;
+      color: white;
+    }
+    .card-btn:hover { background: #2980b9; }
+    .reset-btn {
+      background: #e74c3c;
+      color: white;
+      margin-top: 10px;
+      width: 100%;
+    }
+    .reset-btn:hover { background: #c0392b; }
+    .hint {
+      font-size: 14px;
+      color: #555;
+      margin-top: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    table th, table td {
+      border: 1px solid #ddd;
+      padding: 4px;
+      text-align: center;
+    }
+    table th {
+      background: #f4f4f4;
+    }
+    .bet-input {
+      width: 80px;
+      padding: 5px;
+      text-align: center;
+    }
+    .negative { color: red; font-weight: bold; }
+    .positive { color: green; font-weight: bold; }
+    .zero { color: black; font-weight: bold; }
+
+    /* Strategy chart styling */
+    .strategy {
+      margin-top: 20px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .strategy h3 {
+      margin-top: 10px;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+    .legend {
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    .legend span {
+      display: inline-block;
+      margin-right: 10px;
+    }
+    .H { background: #fff; }
+    .S { background: #f9e79f; } /* yellow */
+    .D { background: #82e0aa; } /* green */
+    .Ds { background: #76d7c4; } /* teal */
+    .N { background: #fff; }
+    .Y { background: #82e0aa; }
+    .YN { background: #76d7c4; }
+    .SUR { background: #58d68d; }
+  </style>
+</head>
+<body>
+
+  <h1>Blackjack Card Counter + Bet Spread</h1>
+  <div class="container">
+    <!-- Left side: dealt cards, history, and count -->
+    <div class="box">
+      <h2>Dealt Cards (Last 10)</h2>
+      <div class="card-list" id="dealt"></div>
+
+      <h2>History</h2>
+      <div class="card-list" id="history"></div>
+
+      <h3>Running Count: <span id="count">0</span></h3>
+      <button class="reset-btn" onclick="resetCounter()">Reset</button>
+    </div>
+
+    <!-- Middle: card selection + strategy -->
+    <div class="box">
+      <h2>Select a Card</h2>
+      <div class="card-buttons">
+        <button class="card-btn" onclick="dealCard('2')">2</button>
+        <button class="card-btn" onclick="dealCard('3')">3</button>
+        <button class="card-btn" onclick="dealCard('4')">4</button>
+        <button class="card-btn" onclick="dealCard('5')">5</button>
+        <button class="card-btn" onclick="dealCard('6')">6</button>
+        <button class="card-btn" onclick="dealCard('7')">7</button>
+        <button class="card-btn" onclick="dealCard('8')">8</button>
+        <button class="card-btn" onclick="dealCard('9')">9</button>
+        <button class="card-btn" onclick="dealCard('10')">10</button>
+        <button class="card-btn" onclick="dealCard('J')">J</button>
+        <button class="card-btn" onclick="dealCard('Q')">Q</button>
+        <button class="card-btn" onclick="dealCard('K')">K</button>
+        <button class="card-btn" onclick="dealCard('A')">A</button>
+      </div>
+      <p class="hint">💡 Keyboard: 1=A, 2=2 … 9=9, 0=10/J/Q/K, R=Reset</p>
+
+      <!-- Strategy chart -->
+      <div class="strategy">
+        <h3>Basic Strategy (Quick Reference)</h3>
+        <table>
+          <thead>
+            <tr><th>Hand</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>A</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Hard 17+</td><td colspan="10" class="S">S</td></tr>
+            <tr><td>Hard 16</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="H">H</td><td class="H">H</td><td class="H">H</td><td class="H">H</td><td class="H">H</td></tr>
+            <tr><td>Hard 12</td><td class="H">H</td><td class="H">H</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="H">H</td><td class="H">H</td><td class="H">H</td><td class="H">H</td><td class="H">H</td></tr>
+            <tr><td>Soft A,7</td><td class="Ds">Ds</td><td class="Ds">Ds</td><td class="Ds">Ds</td><td class="Ds">Ds</td><td class="S">S</td><td class="S">S</td><td class="H">H</td><td class="H">H</td><td class="H">H</td><td class="H">H</td></tr>
+            <tr><td>Pair 8,8</td><td colspan="10" class="Y">Y</td></tr>
+            <tr><td>Pair 10,10</td><td colspan="10" class="N">N</td></tr>
+          </tbody>
+        </table>
+        <div class="legend">
+          <span class="H">H = Hit</span>
+          <span class="S">S = Stand</span>
+          <span class="D">D = Double</span>
+          <span class="Ds">Ds = Double/Stand</span>
+          <span class="Y">Y = Split</span>
+          <span class="N">N = Don’t Split</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Bet spread table -->
+    <div class="box">
+      <h2>Bet Spread</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Count</th>
+            <th>Bet Size</th>
+          </tr>
+        </thead>
+        <tbody id="betTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const countValues = {
+      "2": 1, "3": 1, "4": 1, "5": 1, "6": 1,
+      "7": 0, "8": 0, "9": 0,
+      "10": -1, "J": -1, "Q": -1, "K": -1, "A": -1
+    };
+
+    let runningCount = 0;
+    let dealtCards = [];
+    let historyCards = [];
+
+    function renderCards() {
+      const dealtDiv = document.getElementById("dealt");
+      const historyDiv = document.getElementById("history");
+      dealtDiv.innerHTML = "";
+      historyDiv.innerHTML = "";
+
+      dealtCards.forEach(card => {
+        const span = document.createElement("span");
+        span.textContent = card;
+        dealtDiv.appendChild(span);
+      });
+
+      historyCards.forEach(card => {
+        const span = document.createElement("span");
+        span.textContent = card;
+        historyDiv.appendChild(span);
+      });
+
+      historyDiv.scrollTop = historyDiv.scrollHeight;
+    }
+
+    function dealCard(card) {
+      dealtCards.push(card);
+
+      if (dealtCards.length > 10) {
+        historyCards.push(dealtCards.shift());
+      }
+
+      runningCount += countValues[card];
+      document.getElementById("count").textContent = runningCount;
+      renderCards();
+    }
+
+    function resetCounter() {
+      runningCount = 0;
+      dealtCards = [];
+      historyCards = [];
+      document.getElementById("count").textContent = "0";
+      renderCards();
+    }
+
+    document.addEventListener("keydown", (event) => {
+      switch (event.key) {
+        case "1": dealCard("A"); break;
+        case "2": dealCard("2"); break;
+        case "3": dealCard("3"); break;
+        case "4": dealCard("4"); break;
+        case "5": dealCard("5"); break;
+        case "6": dealCard("6"); break;
+        case "7": dealCard("7"); break;
+        case "8": dealCard("8"); break;
+        case "9": dealCard("9"); break;
+        case "0": dealCard("10"); break; 
+        case "r": case "R": resetCounter(); break;
+      }
+    });
+
+    const betTable = document.getElementById("betTable");
+    for (let i = -3; i <= 5; i++) {
+      const row = document.createElement("tr");
+
+      const indexCell = document.createElement("td");
+      indexCell.textContent = i;
+      if (i < 0) indexCell.classList.add("negative");
+      if (i === 0) indexCell.classList.add("zero");
+      if (i > 0) indexCell.classList.add("positive");
+
+      const betCell = document.createElement("td");
+      const input = document.createElement("input");
+      input.type = "number";
+      input.value = i <= 0 ? 0 : i * 10;
+      input.classList.add("bet-input");
+      betCell.appendChild(input);
+
+      row.appendChild(indexCell);
+      row.appendChild(betCell);
+
+      betTable.appendChild(row);
+    }
+
+    renderCards();
+  </script>
+
+</body>
+</html>
