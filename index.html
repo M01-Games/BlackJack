@@ -37,13 +37,20 @@
       background: #2b2b2b;
       color: #ddd;
     }
-    .dealt-cards {
+
+    /* 🔹 Decks input styling */
+    .decks-input {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 10px;
+      align-items: center;
+      gap: 6px;
     }
-    .dealt-cards span,
+    .decks-input input {
+      width: 60px;
+      padding: 2px;
+    }
+
+    /* 🔹 Card styling for dealt + history */
+    #dealt span,
     #history span {
       display: inline-block;
       background: #eee;
@@ -52,14 +59,16 @@
       border-radius: 6px;
       border: 1px solid #ccc;
     }
-    .dark-mode .dealt-cards span,
+    .dark-mode #dealt span,
     .dark-mode #history span {
       background: #444;
       border-color: #666;
     }
 
-    /* Scrollable history box */
-    #history {
+    /* 🔹 Scrollable card boxes (Last 10 + History) */
+    #dealt,
+    #history,
+    .history-box {
       max-height: 150px;
       overflow-y: auto;
       border: 1px solid #ddd;
@@ -68,7 +77,9 @@
       background: #fafafa;
       margin-bottom: 10px;
     }
-    .dark-mode #history {
+    .dark-mode #dealt,
+    .dark-mode #history,
+    .dark-mode .history-box {
       background: #333;
       border-color: #555;
     }
@@ -104,12 +115,14 @@
       margin-top: 10px;
     }
     .dark-mode .hint { color: #aaa; }
-    /* Middle column layout */
+
+    /* 🔹 Middle column layout */
     .middle-column {
       display: flex;
       flex-direction: column;
     }
-    /* Bet spread box tweaks */
+
+    /* 🔹 Bet spread box tweaks */
     .bet-spread-box {
       margin-top: 20px;       /* consistent gap above */
       flex-grow: 1;           /* stretch down */
@@ -119,6 +132,7 @@
     .bet-spread-box table {
       flex-grow: 1;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -150,21 +164,24 @@
       max-height: 80vh;
       overflow-y: auto;
     }
+
+    /* 🔹 Strategy chart colors */
     .H { background: #fff; }
     .S { background: #f1c40f; }
     .D { background: #2ecc71; }
-    .Ds { background: #1abc9c; }
+    .Ds { background: #1abc9c; }    
     .Y { background: #2ecc71; }
     .N { background: #fff; }
     .YN { background: #27ae60; }
     .SUR { background: #16a085; color: white; }
+
     .legend span {
       margin-right: 10px;
       padding: 4px 6px;
       border-radius: 4px;
       font-size: 12px;
     }
-  </style>
+</style>
 </head>
 <body>
 
@@ -175,16 +192,30 @@
     </label>
   </h1>
 
+  <!-- ✅ Add container wrapper -->
   <div class="container">
+
     <!-- Left -->
-    <div class="box">
+    <div class="box dealt-box">
       <h2>Dealt Cards</h2>
-      <div class="dealt-cards" id="dealt"></div>
+    
+      <div class="decks-input">
+        <label for="decks">Decks in Shoe:</label>
+        <input type="number" id="decks" value="6" min="1">
+      </div>
+    
+      <h2>Last 10</h2>
+      <div class="card-list" id="dealt"></div>
+    
       <h3>Running Count: <span id="count">0</span></h3>
+      <h3>True Count: <span id="trueCount">0</span></h3>
+    
       <h2>History</h2>
-      <div id="history"></div>
+      <div id="history" class="history-box"></div>
+    
       <button class="reset-btn" onclick="resetCounter()">Reset</button>
     </div>
+
 
     <!-- Middle -->
     <div class="middle-column">
@@ -220,6 +251,19 @@
     <!-- Right -->
     <div class="box chart">
       <h2>Basic Strategy</h2>
+
+      <!-- Legend -->
+      <h3>Legend</h3>
+      <div class="legend">
+        <span class="H">H = Hit</span>
+        <span class="S">S = Stand</span>
+        <span class="D">D = Double</span>
+        <span class="Ds">Ds = Double/Stand</span>
+        <span class="Y">Y = Split</span>
+        <span class="N">N = Don’t Split</span>
+        <span class="YN">Y/N = Split if DAS</span>
+        <span class="SUR">SUR = Surrender</span>
+      </div>
 
       <!-- Hard Totals -->
       <h3>Hard Totals</h3>
@@ -291,19 +335,6 @@
           <tr><td>14</td><td colspan="10"></td></tr>
         </tbody>
       </table>
-
-      <!-- Legend -->
-      <h3>Legend</h3>
-      <div class="legend">
-        <span class="H">H = Hit</span>
-        <span class="S">S = Stand</span>
-        <span class="D">D = Double</span>
-        <span class="Ds">Ds = Double/Stand</span>
-        <span class="Y">Y = Split</span>
-        <span class="N">N = Don’t Split</span>
-        <span class="YN">Y/N = Split if DAS</span>
-        <span class="SUR">SUR = Surrender</span>
-      </div>
     </div>
   </div>
 
@@ -339,16 +370,28 @@
       historyDiv.scrollTop = historyDiv.scrollHeight;
     }
 
+    function calculateTrueCount() {
+      const decks = parseFloat(document.getElementById("decks").value) || 1;
+      return (runningCount / decks).toFixed(2);
+    }
+
     function dealCard(card) {
       dealtCards.push(card);
       if (dealtCards.length > 10) historyCards.push(dealtCards.shift());
+    
       runningCount += countValues[card];
       document.getElementById("count").textContent = runningCount;
+      document.getElementById("trueCount").textContent = calculateTrueCount();
+    
       renderCards();
     }
+
     function resetCounter() {
-      runningCount = 0; dealtCards = []; historyCards = [];
+      runningCount = 0;
+      dealtCards = [];
+      historyCards = [];
       document.getElementById("count").textContent = "0";
+      document.getElementById("trueCount").textContent = "0";
       renderCards();
     }
 
