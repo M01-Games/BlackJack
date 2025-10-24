@@ -57,6 +57,19 @@
     .status{margin-top:10px; font-size:13px; color:var(--muted); text-align:center}
     .overlay-open-btn{ position:absolute; right:28px; top:28px; z-index:5; background:rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.06); color:#e6eef6; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:700; backdrop-filter: blur(4px); }
 
+    /* Fullscreen fallback pseudo-fullscreen class (useful on iOS) */
+    .fs-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+      z-index: 99999 !important;
+      background: linear-gradient(180deg,#071029 0%, #061621 100%) !important;
+      overflow: auto !important;
+    }
+
     .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:flex-end; pointer-events:none; }
     .overlay-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.45); opacity:0; transition:opacity .2s; pointer-events:none; }
     .panel { width:380px; max-width:92vw; height:100vh; transform:translateX(110%); transition:transform .25s; background:linear-gradient(180deg, rgba(10,14,20,0.98), rgba(6,10,14,0.98)); padding:20px; box-shadow: -20px 0 40px rgba(0,0,0,0.6); pointer-events:auto; overflow:auto; }
@@ -117,6 +130,8 @@
           <button id="pause-btn" class="btn">Pause</button>
           <button id="restart-btn" class="btn">Restart the clock</button>
           <button id="restart-one-btn" class="btn ghost">Restart the game</button>
+          <!-- Fullscreen toggle button added -->
+          <button id="fullscreen-btn" class="btn">Enter Fullscreen</button>
         </div>
 
         <div id="status" class="status">Ready</div>
@@ -181,6 +196,11 @@
       const restartBtn = document.getElementById('restart-btn');
       const restartToOneBtn = document.getElementById('restart-one-btn');
 
+      // Fullscreen elements
+      const fsBtn = document.getElementById('fullscreen-btn');
+      const fsTarget = document.getElementById('timer-area') || document.documentElement;
+      let fallbackActive = false;
+
       // State
       let rows = [];
       let selectedId = null;
@@ -204,7 +224,7 @@
         return audioCtx;
       }
 
-      function playBeepOnce(duration = 0.12, frequency = 1200, type = 'sine', volume = 2.5){
+      function playBeepOnce(duration = 0.12, frequency = 1200, type = 'sine', volume = 0.18){
         const ctx = ensureAudioContext();
         if(!ctx) return;
         const now = ctx.currentTime;
@@ -396,6 +416,60 @@
         statusEl.textContent = 'Running';
       }
 
+      // Fullscreen helpers
+      function isFullscreenSupported() {
+        return !!(document.fullscreenEnabled || document.webkitFullscreenEnabled || document.msFullscreenEnabled);
+      }
+      function enterNativeFullscreen(el){
+        if (el.requestFullscreen) return el.requestFullscreen();
+        if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
+        if (el.msRequestFullscreen) return el.msRequestFullscreen();
+        return Promise.reject(new Error('No native fullscreen'));
+      }
+      function exitNativeFullscreen(){
+        if (document.exitFullscreen) return document.exitFullscreen();
+        if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+        if (document.msExitFullscreen) return document.msExitFullscreen();
+        return Promise.reject(new Error('No native fullscreen'));
+      }
+      function isInNativeFullscreen(){
+        return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+      }
+      function enterFallback() {
+        fsTarget.classList.add('fs-fullscreen');
+        fallbackActive = true;
+        fsBtn.textContent = 'Exit Fullscreen';
+      }
+      function exitFallback() {
+        fsTarget.classList.remove('fs-fullscreen');
+        fallbackActive = false;
+        fsBtn.textContent = 'Enter Fullscreen';
+      }
+
+      async function toggleFullscreen(){
+        if (isInNativeFullscreen()) {
+          await exitNativeFullscreen().catch(()=>{});
+          fsBtn.textContent = 'Enter Fullscreen';
+          return;
+        }
+        if (isFullscreenSupported()) {
+          try {
+            await enterNativeFullscreen(fsTarget);
+            fsBtn.textContent = 'Exit Fullscreen';
+            return;
+          } catch (e) {
+            // fall through to fallback
+          }
+        }
+        if (!fallbackActive) enterFallback(); else exitFallback();
+      }
+
+      function onFullscreenChange() {
+        if (isInNativeFullscreen()) fsBtn.textContent = 'Exit Fullscreen';
+        else if (fallbackActive) fsBtn.textContent = 'Exit Fullscreen';
+        else fsBtn.textContent = 'Enter Fullscreen';
+      }
+
       // Buttons and structure mutation
       addLevelBtn.addEventListener('click', () => { const newRow = createRowObj('level', '', '200/400', 10); if(selectedId){ const idx = rows.findIndex(r=>r.id===selectedId); rows.splice(idx+1,0,newRow); } else rows.push(newRow); renderRows(); });
       addBreakBtn.addEventListener('click', () => { const newRow = createRowObj('break', 'Break', '', 5); if(selectedId){ const idx = rows.findIndex(r=>r.id===selectedId); rows.splice(idx+1,0,newRow); } else rows.push(newRow); renderRows(); });
@@ -417,6 +491,11 @@
         let firstIdx = rows.findIndex(r => r.type === 'level'); if(firstIdx === -1) firstIdx = 0;
         setCurrentIndex(firstIdx); stopTimer(); statusEl.textContent = 'Reset to Level One';
       });
+
+      fsBtn.addEventListener('click', toggleFullscreen);
+      document.addEventListener('fullscreenchange', onFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+      document.addEventListener('MSFullscreenChange', onFullscreenChange);
 
       // Init defaults
       function initDefaults(){
