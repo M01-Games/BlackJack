@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blind Timer — Structure Overlay</title>
+  <style>
+    :root{
+      --bg:#0f1720; --muted:#94a3b8; --accent:#e23b3b; --glass:rgba(255,255,255,0.03);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; background:linear-gradient(180deg,#071029 0%, #061621 100%);
+      color:#e6eef6; padding:28px; min-height:100vh; display:flex; align-items:flex-start; justify-content:center;
+    }
+    .container{width:900px; display:grid; grid-template-columns:1fr; gap:20px; position:relative;}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+          border:1px solid rgba(255,255,255,0.04); padding:18px; border-radius:10px; position:relative;}
+    .timer-card{display:flex; flex-direction:column; align-items:center; text-align:center; padding:36px 18px;}
+    .tournament-title{font-weight:700; font-size:20px; margin-bottom:6px}
+    .round{color:var(--muted); font-size:14px; margin-bottom:6px}
+    .big-timer{font-size:64px; font-weight:800; letter-spacing:2px; margin:8px 0; color:#fff;}
+    .next-break{font-size:13px; color:var(--muted); margin-bottom:14px}
+    .blinds{display:flex; gap:20px; align-items:center; margin-top:6px}
+    .pill{background:var(--glass); padding:10px 14px; border-radius:8px; min-width:140px}
+    .pill .label{font-size:12px; color:var(--muted)}
+    .pill .value{font-size:18px; font-weight:700}
+    .controls{display:flex; gap:10px; margin-top:18px; flex-wrap:wrap}
+    .btn{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+         border:1px solid rgba(255,255,255,0.06); padding:8px 12px; border-radius:8px; color:inherit;
+         cursor:pointer; font-weight:700;}
+    .btn.primary{background:linear-gradient(180deg,#e23b3b,#c02828); color:#fff; border:0}
+    .btn.ghost{background:transparent}
+    .status{margin-top:10px; font-size:13px; color:var(--muted)}
+
+    /* Overlay opener button (over timer) */
+    .overlay-open-btn{
+      position:absolute; right:28px; top:28px; z-index:5;
+      background:rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.06); color:#e6eef6;
+      padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:700;
+      backdrop-filter: blur(4px);
+    }
+
+    /* Sliding panel overlay */
+    .overlay {
+      position:fixed; inset:0; display:flex; align-items:center; justify-content:flex-end;
+      pointer-events:none;
+    }
+    .overlay-backdrop {
+      position:absolute; inset:0; background:rgba(0,0,0,0.45); opacity:0; transition:opacity .2s;
+      pointer-events:none;
+    }
+    .panel {
+      width:380px; max-width:92vw; height:100vh; transform:translateX(110%); transition:transform .25s;
+      background:linear-gradient(180deg, rgba(10,14,20,0.98), rgba(6,10,14,0.98)); padding:20px; box-shadow: -20px 0 40px rgba(0,0,0,0.6);
+      pointer-events:auto; overflow:auto;
+    }
+    .panel.open{ transform:translateX(0); }
+    .overlay.open .overlay-backdrop{ opacity:1; pointer-events:auto; }
+
+    /* Structure table inside panel */
+    h4{margin:0 0 10px 0; font-size:16px; color:var(--muted)}
+    .small{font-size:12px; color:var(--muted)}
+    table{width:100%; border-collapse:collapse; font-size:13px; color:#dbe9ff}
+    thead th{font-size:12px; color:var(--muted); font-weight:600; text-align:left; padding:8px}
+    td{padding:6px 8px; vertical-align:middle}
+    tbody tr{border-top:1px solid rgba(255,255,255,0.02); cursor:pointer}
+    tbody tr:hover{background:rgba(255,255,255,0.01)}
+    .level-current{background:linear-gradient(90deg, rgba(226,59,59,0.10), rgba(226,59,59,0.04)); color:#fff; font-weight:700}
+    input[type="text"], input[type="number"]{ width:100%; background:transparent; border:0; color:inherit; padding:6px; font-size:13px; }
+    input[type="number"]{ text-align:right; }
+
+    .panel .structure-actions{display:flex; gap:8px; margin-top:10px}
+    .panel .close-btn{position:absolute; left:12px; top:12px; background:transparent; border:0; color:var(--muted); cursor:pointer; font-weight:700}
+    @media (max-width:720px){
+      .panel{ width:100%; transform:translateX(110%); }
+      .overlay-open-btn{ right:12px; top:12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card timer-card" id="timer-area">
+      <button class="overlay-open-btn btn" id="open-structure">Structure</button>
+
+      <div class="tournament-title">Poker Timer</div>
+      <div id="round-label" class="round">Round 1</div>
+      <div id="countdown" class="big-timer">00:00</div>
+      <div class="next-break">Next break in <span id="next-break">—</span></div>
+
+      <div class="blinds" role="group" aria-label="blinds">
+        <div class="pill">
+          <div class="label">Blinds</div>
+          <div id="current-blinds" class="value">-</div>
+        </div>
+        <div class="pill">
+          <div class="label">Next Blinds</div>
+          <div id="next-blinds" class="value">-</div>
+        </div>
+      </div>
+
+      <div class="controls" role="toolbar" aria-label="timer controls">
+        <button id="start-btn" class="btn primary">Start</button>
+        <button id="pause-btn" class="btn">Pause</button>
+        <button id="restart-btn" class="btn">Restart</button>
+        <button id="restart-one-btn" class="btn ghost">Restart to Level One</button>
+      </div>
+
+      <div id="status" class="status">Idle</div>
+    </div>
+  </div>
+
+  <!-- Overlay with sliding structure panel -->
+  <div class="overlay" id="overlay" aria-hidden="true">
+    <div class="overlay-backdrop" id="overlay-backdrop"></div>
+    <aside class="panel" id="panel" role="dialog" aria-label="Structure panel">
+      <button class="close-btn" id="close-panel">Close</button>
+      <h4>Structure</h4>
+      <p class="small">Edit blinds and duration inline. Add or remove levels. Click Select to set current.</p>
+
+      <table aria-label="blind structure" id="structure-table">
+        <thead>
+          <tr><th style="width:18%;">Level</th><th style="width:52%;">Blinds</th><th style="width:20%;">Duration</th><th style="width:10%;"></th></tr>
+        </thead>
+        <tbody id="structure-body"></tbody>
+      </table>
+
+      <div class="structure-actions">
+        <button id="add-level" class="btn primary">Add Level</button>
+        <button id="add-break" class="btn">Add Break</button>
+        <button id="remove-level" class="btn">Remove Selected</button>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    (function(){
+      // Overlay open/close
+      const openBtn = document.getElementById('open-structure');
+      const overlay = document.getElementById('overlay');
+      const panel = document.getElementById('panel');
+      const backdrop = document.getElementById('overlay-backdrop');
+      const closeBtn = document.getElementById('close-panel');
+
+      function openPanel(){
+        overlay.classList.add('open');
+        panel.classList.add('open');
+        overlay.setAttribute('aria-hidden','false');
+        // focus first input in panel when opened
+        setTimeout(()=>{ const inp = panel.querySelector('input'); if(inp) inp.focus(); }, 250);
+      }
+      function closePanel(){
+        overlay.classList.remove('open');
+        panel.classList.remove('open');
+        overlay.setAttribute('aria-hidden','true');
+      }
+      openBtn.addEventListener('click', openPanel);
+      closeBtn.addEventListener('click', closePanel);
+      backdrop.addEventListener('click', closePanel);
+      document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closePanel(); });
+
+      // Structure and timer logic (same feature set as before)
+      const structureBody = document.getElementById('structure-body');
+      const addLevelBtn = document.getElementById('add-level');
+      const addBreakBtn = document.getElementById('add-break');
+      const removeLevelBtn = document.getElementById('remove-level');
+
+      const countdownEl = document.getElementById('countdown');
+      const currentBlindsEl = document.getElementById('current-blinds');
+      const nextBlindsEl = document.getElementById('next-blinds');
+      const roundLabel = document.getElementById('round-label');
+      const nextBreakLabel = document.getElementById('next-break');
+      const statusEl = document.getElementById('status');
+
+      const startBtn = document.getElementById('start-btn');
+      const pauseBtn = document.getElementById('pause-btn');
+      const restartBtn = document.getElementById('restart-btn');
+      const restartToOneBtn = document.getElementById('restart-one-btn');
+
+      let rows = []; // {id, type:'level'|'break', label, blinds, duration}
+      let selectedId = null;
+      let currentIndex = 0;
+
+      let timer = null;
+      let remaining = 0;
+      let initialRemaining = 0;
+      let playing = false;
+
+      function uid(){ return 'lvl_' + Math.random().toString(36).slice(2,9); }
+      function createRowObj(type='level', label='', blinds='', duration=10){
+        return { id: uid(), type, label, blinds, duration: Number(duration) || 1 };
+      }
+      function escapeHtml(text){ return (''+text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+
+      function renderRows(){
+        structureBody.innerHTML = '';
+        rows.forEach((r, idx) => {
+          const tr = document.createElement('tr');
+          tr.dataset.id = r.id;
+          if(idx === currentIndex) tr.classList.add('level-current');
+          tr.innerHTML = `
+            <td>${r.type === 'break' ? 'Break' : (r.label || idx+1)}</td>
+            <td>${r.type === 'break' ? '<span style="opacity:.6">-</span>' : `<input type="text" data-field="blinds" value="${escapeHtml(r.blinds)}" />`}</td>
+            <td><input type="number" ${r.type==='break' ? '' : 'data-field="duration"'} min="1" value="${r.duration}" style="width:70px" />m</td>
+            <td style="text-align:right"><button class="btn" data-action="select">Select</button></td>
+          `;
+          structureBody.appendChild(tr);
+
+          tr.querySelector('[data-action="select"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectRow(r.id);
+            setCurrentById(r.id);
+            // close panel to reveal timer quickly
+            closePanel();
+          });
+
+          tr.addEventListener('click', () => selectRow(r.id));
+
+          const blindsInput = tr.querySelector('input[data-field="blinds"]');
+          const durInput = tr.querySelector('input[data-field="duration"]');
+
+          if(blindsInput){
+            blindsInput.addEventListener('input', (ev) => {
+              r.blinds = ev.target.value;
+              if(rows[currentIndex] && rows[currentIndex].id === r.id) updateVisibleBlinds();
+            });
+          }
+          if(durInput){
+            durInput.addEventListener('input', (ev) => {
+              const v = parseInt(ev.target.value,10);
+              r.duration = Number.isFinite(v) && v>0 ? v : 1;
+              if(rows[currentIndex] && rows[currentIndex].id === r.id){
+                initialRemaining = r.duration * 60;
+                remaining = initialRemaining;
+                updateCountdownDisplay();
+              }
+            });
+          }
+        });
+      }
+
+      function selectRow(id){
+        selectedId = id;
+        Array.from(structureBody.querySelectorAll('tr')).forEach(tr => {
+          tr.style.outline = tr.dataset.id === id ? '2px solid rgba(255,255,255,0.03)' : 'none';
+        });
+      }
+
+      function setCurrentById(id){
+        const idx = rows.findIndex(r => r.id === id);
+        if(idx === -1) return;
+        setCurrentIndex(idx);
+      }
+
+      function setCurrentIndex(idx){
+        if(idx < 0 || idx >= rows.length) return;
+        currentIndex = idx;
+        const r = rows[currentIndex];
+        renderRows();
+        updateVisibleBlinds();
+        roundLabel.textContent = r.type === 'break' ? 'Break' : ('Round ' + getRoundNumberForIndex(currentIndex));
+        nextBreakLabel.textContent = findNextBreakInfo(currentIndex);
+        initialRemaining = r.duration * 60;
+        remaining = initialRemaining;
+        updateCountdownDisplay();
+        stopTimer();
+        statusEl.textContent = 'Ready';
+      }
+
+      function getRoundNumberForIndex(idx){ return rows.slice(0, idx+1).filter(x => x.type === 'level').length; }
+      function findNextIndex(idx){ return idx + 1 < rows.length ? idx + 1 : -1; }
+      function findNextBreakInfo(idx){ for(let j=idx+1;j<rows.length;j++){ if(rows[j].type==='break') return rows[j].duration + 'm'; } return '—'; }
+
+      function updateVisibleBlinds(){
+        const r = rows[currentIndex];
+        if(!r) return;
+        currentBlindsEl.textContent = r.type === 'break' ? '-' : (r.blinds || '-');
+        const nextIdx = findNextIndex(currentIndex);
+        const next = nextIdx === -1 ? null : rows[nextIdx];
+        nextBlindsEl.textContent = next ? (next.type === 'break' ? '-' : (next.blinds || '-')) : '-';
+      }
+
+      function updateCountdownDisplay(){
+        const m = Math.floor(remaining/60).toString().padStart(2,'0');
+        const s = (remaining%60).toString().padStart(2,'0');
+        countdownEl.textContent = `${m}:${s}`;
+      }
+
+      function tick(){
+        if(remaining > 0){
+          remaining--;
+          updateCountdownDisplay();
+          return;
+        }
+        advanceToNextAndAutoStart();
+      }
+
+      function startTimer(){
+        if(playing) return;
+        if(remaining <= 0) remaining = initialRemaining || 0;
+        timer = setInterval(tick, 1000);
+        playing = true;
+        statusEl.textContent = 'Running';
+      }
+      function pauseTimer(){ if(timer) clearInterval(timer); timer = null; playing = false; statusEl.textContent = 'Paused'; }
+      function stopTimer(){ pauseTimer(); }
+      function restartTimer(){ remaining = initialRemaining; updateCountdownDisplay(); stopTimer(); statusEl.textContent = 'Ready'; }
+
+      function advanceToNextAndAutoStart(){
+        const nextIdx = findNextIndex(currentIndex);
+        if(nextIdx === -1){
+          stopTimer();
+          remaining = 0;
+          updateCountdownDisplay();
+          statusEl.textContent = 'Finished';
+          return;
+        }
+        currentIndex = nextIdx;
+        const r = rows[currentIndex];
+        renderRows();
+        updateVisibleBlinds();
+        roundLabel.textContent = r.type === 'break' ? 'Break' : ('Round ' + getRoundNumberForIndex(currentIndex));
+        nextBreakLabel.textContent = findNextBreakInfo(currentIndex);
+        initialRemaining = r.duration * 60;
+        remaining = initialRemaining;
+        updateCountdownDisplay();
+        if(timer) clearInterval(timer);
+        timer = setInterval(tick, 1000);
+        playing = true;
+        statusEl.textContent = 'Running';
+      }
+
+      // Buttons
+      addLevelBtn.addEventListener('click', () => {
+        const newRow = createRowObj('level', '', '200/400', 10);
+        if(selectedId){
+          const idx = rows.findIndex(r=>r.id===selectedId);
+          rows.splice(idx+1,0,newRow);
+        } else rows.push(newRow);
+        renderRows();
+      });
+
+      addBreakBtn.addEventListener('click', () => {
+        const newRow = createRowObj('break', 'Break', '', 5);
+        if(selectedId){
+          const idx = rows.findIndex(r=>r.id===selectedId);
+          rows.splice(idx+1,0,newRow);
+        } else rows.push(newRow);
+        renderRows();
+      });
+
+      removeLevelBtn.addEventListener('click', () => {
+        if(!selectedId) return;
+        const idx = rows.findIndex(r=>r.id===selectedId);
+        if(idx === -1) return;
+        rows.splice(idx,1);
+        if(rows.length === 0){
+          currentIndex = 0; selectedId = null; renderRows();
+          countdownEl.textContent = '00:00'; currentBlindsEl.textContent='-'; nextBlindsEl.textContent='-';
+          statusEl.textContent = 'No levels'; stopTimer(); return;
+        }
+        if(idx <= currentIndex && currentIndex > 0) currentIndex--;
+        selectedId = null; renderRows(); setCurrentIndex(currentIndex);
+      });
+
+      startBtn.addEventListener('click', startTimer);
+      pauseBtn.addEventListener('click', pauseTimer);
+      restartBtn.addEventListener('click', restartTimer);
+      restartToOneBtn.addEventListener('click', () => {
+        if(rows.length === 0) return;
+        let firstIdx = rows.findIndex(r => r.type === 'level');
+        if(firstIdx === -1) firstIdx = 0;
+        setCurrentIndex(firstIdx);
+        stopTimer();
+        statusEl.textContent = 'Reset to Level One';
+      });
+
+      // init defaults
+      function initDefaults(){
+        rows = [
+          createRowObj('level','1','25/50',10),
+          createRowObj('level','2','50/100',10),
+          createRowObj('level','3','100/200',10),
+          createRowObj('level','4','150/300',10),
+          createRowObj('level','5','200/400',10),
+          createRowObj('level','6','400/800',10),
+          createRowObj('level','7','600/1200',10),
+          createRowObj('level','8','800/1600',10),
+          createRowObj('level','9','1000/2000',10),
+          createRowObj('level','10','1250/2500',10)
+        ];
+        renderRows();
+        const startIdx = rows.findIndex(r=>r.type==='level' && r.blinds==='200/400');
+        setCurrentIndex(startIdx === -1 ? 0 : startIdx);
+      }
+
+      initDefaults();
+    })();
+  </script>
+</body>
+</html>
