@@ -224,7 +224,7 @@
         return audioCtx;
       }
 
-      function playBeepOnce(duration = 0.12, frequency = 1200, type = 'sine', volume = 0.18){
+      function playBeepOnce(duration = 0.12, frequency = 1200, type = 'sine', volume = 2.5){
         const ctx = ensureAudioContext();
         if(!ctx) return;
         const now = ctx.currentTime;
@@ -524,3 +524,4 @@
   </script>
 </body>
 </html>
+
